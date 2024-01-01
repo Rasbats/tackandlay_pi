@@ -1,100 +1,124 @@
-##---------------------------------------------------------------------------
-## Author:      nohal aka. Pavel Kalian
-## Copyright:   
-## License:     wxWidgets License
-##---------------------------------------------------------------------------
+# ~~~
+# Summary:      Main plugin build script
+# Copyright (c) 2020-2021 Mike Rossiter
+# License:      GPLv3+
+# ~~~
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# -------- Cmake setup ---------
+#
+cmake_minimum_required(VERSION 3.12.0)
+include(${CMAKE_SOURCE_DIR}/cmake/CmakeSetup.cmake NO_POLICY_SCOPE)
+message(STATUS "Cmake version: ${CMAKE_VERSION}.")
+
+
+# -------- Build setup  --------
+#
+include(PluginOptions)
+if (BUILD_TYPE)
+  message(STATUS "Building: ${BUILD_TYPE}")
+else ()
+  message(STATUS "Configuring")
+endif ()
+
+# -------- Plugin setup ----------
+#
+include(Plugin.cmake)
+
+# -------- Setup completed, build the plugin --------
+#
+project(${PKG_NAME} VERSION ${PKG_VERSION})
+include(PluginCompiler)
+
+add_library(${CMAKE_PROJECT_NAME} SHARED EXCLUDE_FROM_ALL ${SRC})
+include_directories(BEFORE ${CMAKE_BINARY_DIR}/include)
+
+add_subdirectory("opencpn-libs/${PKG_API_LIB}")
+target_link_libraries(${CMAKE_PROJECT_NAME} ocpn::api)
+
+set(VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(VERSION_PATCH ${PROJECT_VERSION_PATCH})
+if (PROJECT_VERSION_TWEAK STREQUAL "")
+  set(PROJECT_VERSION_TWEAK 0)
+endif ()
+
+
+set(PACKAGE_NAME ${CMAKE_PROJECT_NAME})
+
+# Create the minimim ocpn version id string like ov50
+string(REGEX REPLACE "\([0-9]\)\.\([0-9]\).*" "ov\\1\\2"
+       OCPN_MIN_VERSION ${API_OCPN_MIN_VERSION})
+
+if (COMMAND late_init)
+  late_init()
+endif ()
+
+# Configure the flatpak manifest
+file(
+  GLOB manifest ${PROJECT_SOURCE_DIR}/flatpak/org.opencpn.OpenCPN.Plugin.*.yaml
+)
+include(ConfigureManifest)
+configure_manifest(${manifest} _new_manifest)
+
+# Set up targets. Targets sets up new targets with BUILD_TYPE set to
+# 'flatpak', 'android' or 'tarball'. The initial call without BUILD_TYPE ends
+# here.
+#
+include(Targets)
+create_targets(${_new_manifest})
+
+if ("${BUILD_TYPE}" STREQUAL "")
+  return ()
+endif ()
+
  
-# define minimum cmake version
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6.2)
+if (NOT ${BUILD_TYPE} STREQUAL "flatpak")
+  # Build package as required (flatpak already dealt with).
+  #
+  if (APPLE)
+    include(MacosWxwidgets)
+  endif ()
+  include(PluginInstall)
+  if (QT_ANDROID)
+    include(AndroidLibs)
+  else ()
+    include(PluginLibs)
+  endif ()
+  include(PluginLocalization)
 
-PROJECT(tackandlay_pi)
+  include_directories(BEFORE ${CMAKE_BINARY_DIR}/include)
+ 
+  if (COMMAND add_plugin_libraries)
+    add_plugin_libraries()
+  endif ()
 
-SET(PACKAGE_NAME tackandlay_pi)
-SET(VERBOSE_NAME tackandlay)
-SET(TITLE_NAME tackandlay)
-SET(CPACK_PACKAGE_CONTACT "Dave Cowell")
+endif ()
 
-SET(VERSION_MAJOR "0")
-SET(VERSION_MINOR "2")
-
-INCLUDE("cmake/PluginConfigure.cmake")
-
-SET(SRC_TackandLay
-            src/tackandlay_pi.h
-            src/tackandlay_pi.cpp
-		 src/icons.h
-            src/icons.cpp
-		)
-
-SET(SRC_NMEA0183
-    src/nmea0183/latlong.hpp
-    src/nmea0183/latlong.cpp
-    src/nmea0183/long.cpp
-    src/nmea0183/nmea0183.cpp
-    src/nmea0183/nmea0183.hpp
-    src/nmea0183/response.hpp
-    src/nmea0183/response.cpp
-    src/nmea0183/rmb.hpp
-    src/nmea0183/rmb.cpp
-    src/nmea0183/sentence.hpp
-    src/nmea0183/sentence.cpp
-    src/nmea0183/talkerid.cpp
-    src/nmea0183/rmc.hpp
-    src/nmea0183/rmc.cpp
-    src/nmea0183/hexvalue.cpp
-    src/nmea0183/lat.cpp
-    src/nmea0183/expid.cpp
-    src/nmea0183/wpl.hpp
-    src/nmea0183/wpl.cpp
-    src/nmea0183/rte.hpp
-    src/nmea0183/rte.cpp
-    src/nmea0183/hdt.hpp
-    src/nmea0183/hdt.cpp
-    src/nmea0183/hdg.hpp
-    src/nmea0183/hdg.cpp
-    src/nmea0183/hdm.hpp
-    src/nmea0183/hdm.cpp
-    src/nmea0183/gll.hpp
-    src/nmea0183/gll.cpp
-    src/nmea0183/vtg.hpp
-    src/nmea0183/vtg.cpp
-    src/nmea0183/gga.hpp
-    src/nmea0183/gga.cpp
-    src/nmea0183/gsv.hpp
-    src/nmea0183/gsv.cpp
-    src/nmea0183/dbt.cpp
-    src/nmea0183/dbt.hpp
-    src/nmea0183/dpt.cpp
-    src/nmea0183/dpt.hpp
-    src/nmea0183/mtw.cpp
-    src/nmea0183/mtw.hpp
-    src/nmea0183/mwv.cpp
-    src/nmea0183/mwv.hpp
-    src/nmea0183/vhw.hpp
-    src/nmea0183/vhw.cpp
-    src/nmea0183/vwr.cpp
-    src/nmea0183/vwr.hpp
-    src/nmea0183/zda.cpp
-    src/nmea0183/zda.hpp
-    src/nmea0183/rsa.hpp
-    src/nmea0183/rsa.cpp
-    src/nmea0183/satinfo.h
-    src/nmea0183/mwd.cpp
-    src/nmea0183/mwd.hpp
-    src/nmea0183/vwt.cpp
-    src/nmea0183/vwt.hpp
-    src/nmea0183/mta.cpp
-    src/nmea0183/mta.hpp
-    src/nmea0183/vlw.cpp
-    src/nmea0183/vlw.hpp
-    src/nmea0183/mda.cpp
-    src/nmea0183/mda.hpp
+configure_file(
+  ${CMAKE_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/include/config.h
+  @ONLY
 )
 
-INCLUDE_DIRECTORIES(src/nmea0183)
+configure_file(
+  # The cloudsmith upload script
+  ${CMAKE_SOURCE_DIR}/ci/upload.sh.in ${CMAKE_BINARY_DIR}/upload.sh
+  @ONLY
+)
+configure_file(
+  # The cloudsmith upload script, windows bat file.
+  ${CMAKE_SOURCE_DIR}/ci/upload.bat.in ${CMAKE_BINARY_DIR}/upload.bat
+  @ONLY
+)
 
-ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_TackandLay} ${SRC_NMEA0183})
-
-INCLUDE("cmake/PluginInstall.cmake")
-INCLUDE("cmake/PluginLocalization.cmake")
-INCLUDE("cmake/PluginPackage.cmake")
+set(checksum "@checksum@")
+configure_file(
+  # The XML metadata file
+  ${CMAKE_SOURCE_DIR}/plugin.xml.in
+  ${CMAKE_BINARY_DIR}/${pkg_displayname}.xml.in
+  @ONLY
+)
